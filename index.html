@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FX Calc">
+<meta name="theme-color" content="#000000">
+<title>FX Calc</title>
+<link id="touchicon" rel="apple-touch-icon" href="">
+<link id="favicon" rel="icon" href="">
+<style>
+  :root{
+    --bg:#000; --text:#fff; --muted:#8e8e93; --dim:#a1a1a6;
+    --active:#1c1c1e; --orange:#ff9f0a;
+    --key:#333335; --fn:#5c5c5e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,"SF Pro Display",system-ui,Helvetica,Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  body{position:fixed;inset:0;overflow:hidden}
+  .app{display:flex;flex-direction:column;height:100%;max-width:500px;margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 10px)}
+
+  /* tiny menu trigger */
+  .dots{position:fixed;top:env(safe-area-inset-top);right:max(6px, calc(50% - 244px));
+    width:44px;height:22px;padding:0;border:0;background:none;color:var(--muted);
+    font-size:18px;line-height:18px;letter-spacing:1px;z-index:5;touch-action:manipulation}
+  .dots:active{color:#fff}
+  .backdrop{position:fixed;inset:0;z-index:10}
+  .menu{position:fixed;top:calc(env(safe-area-inset-top) + 24px);right:max(10px, calc(50% - 240px));
+    min-width:230px;background:#2c2c2e;border-radius:14px;overflow:hidden;z-index:11;
+    box-shadow:0 12px 32px rgba(0,0,0,.55)}
+  .menu .fresh{font-size:13px;color:var(--muted);padding:11px 16px}
+  .menu .ver{font-size:11px;color:#636366;padding:8px 16px 10px;border-top:.5px solid #3a3a3c}
+  .menu button{display:block;width:100%;text-align:left;background:none;border:0;
+    border-top:.5px solid #3a3a3c;color:#fff;font:inherit;font-size:17px;padding:13px 16px}
+  .menu button:active{background:#3a3a3c}
+  .menu .tog{display:flex;align-items:center;justify-content:space-between;padding:9px 16px}
+  .switch{position:relative;flex:none;width:51px;height:31px;border-radius:16px;background:#39393d;transition:background .2s}
+  .switch::after{content:'';position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;
+    background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.3);transition:transform .2s}
+  .switch.on{background:#34c759}
+  .switch.on::after{transform:translateX(20px)}
+  [hidden]{display:none !important}
+
+  /* Rows stack from the top and shrink together, so all five always fit */
+  .rows{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;
+    gap:4px;padding:0 0 12px}
+  .row{flex:1 1 0;max-height:90px;min-height:0;overflow:hidden;container-type:size;
+    display:flex;align-items:center;gap:12px;
+    padding:0 14px;border-radius:18px;transition:background .15s,transform .15s;touch-action:manipulation}
+  .row.active{background:var(--active)}
+  .row.armed{transform:scale(.97);background:#2c2c2e}
+  .cur{display:flex;align-items:center;gap:10px;flex:none}
+  .flag{font-size:min(36px, 44cqh);line-height:1}
+  .code{font-size:min(24px, 30cqh);font-weight:600;letter-spacing:.3px}
+  .row.active .code{color:var(--orange)}
+  .val{flex:1;min-width:0;text-align:right}
+  .num{font-size:50px;font-weight:300;white-space:nowrap;overflow:hidden;
+    font-variant-numeric:tabular-nums;color:var(--dim);line-height:1.1}
+  .row.active .num{color:var(--text);font-weight:400}
+  .sub{font-size:min(14px, 18cqh);color:var(--orange);font-variant-numeric:tabular-nums}
+  .sub:empty{display:none}
+
+  .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex:none}
+  .key{height:clamp(44px,8.6vh,78px);height:clamp(44px,8.6dvh,78px);border:0;border-radius:999px;background:var(--key);
+    color:#fff;font-family:inherit;font-size:32px;font-weight:400;touch-action:manipulation;
+    display:flex;align-items:center;justify-content:center;padding:0}
+  .key.fn{background:var(--fn);font-size:28px}
+  .key.op{background:var(--orange);font-size:38px}
+  .key.small{font-size:24px}
+  .key:active{filter:brightness(1.45)}
+  .key svg{width:34px;height:26px}
+
+  /* edit currencies sheet */
+  .sheet{position:fixed;inset:0;background:#000;z-index:20;display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  .sheet-in{display:flex;flex-direction:column;height:100%;width:100%;max-width:500px;margin:0 auto}
+  .sheet-head{display:grid;grid-template-columns:90px 1fr 90px;align-items:center;height:50px;padding:0 8px;flex:none}
+  .sheet-head button{background:none;border:0;color:var(--orange);font:inherit;font-size:17px;padding:8px}
+  #sheetBack{justify-self:start}
+  #sheetDone{justify-self:end;font-weight:600}
+  .sheet-title{text-align:center;font-size:17px;font-weight:600}
+  .sheet-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 16px}
+  .hint{color:var(--muted);font-size:13px;margin:6px 4px 12px}
+  .item{display:flex;align-items:center;gap:14px;width:100%;background:var(--active);border:0;
+    color:#fff;font:inherit;text-align:left;padding:12px 14px;border-radius:14px;margin-bottom:8px}
+  .item .flag{font-size:30px}
+  .item .ic{font-size:18px;font-weight:600;width:50px;flex:none}
+  .item .in{flex:1;color:var(--dim);font-size:15px}
+  .item .tag{color:var(--orange);font-size:15px;flex:none}
+  .item .tag.muted{color:var(--muted)}
+  .item .chev{color:var(--muted);font-size:20px;flex:none}
+  .item:disabled{opacity:.35}
+  .item:active:not(:disabled){filter:brightness(1.5)}
+
+  .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 28px);
+    transform:translate(-50%,-10px);background:#2c2c2e;color:#fff;font-size:14px;
+    padding:9px 16px;border-radius:20px;opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;white-space:nowrap;z-index:30}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<button class="dots" id="dots" type="button" aria-label="Menu">•••</button>
+<div class="backdrop" id="backdrop" hidden></div>
+<div class="menu" id="menu" hidden>
+  <div class="fresh" id="fresh">Loading rates…</div>
+  <button type="button" id="mUpdate">Update forex</button>
+  <button type="button" id="mEdit">Edit currencies</button>
+  <button type="button" id="mDec" class="tog" role="switch" aria-checked="true"><span>Decimals</span><span class="switch" id="decSwitch"></span></button>
+  <div class="ver">FX Calc · Version 2</div>
+</div>
+
+<div class="app">
+  <div class="rows" id="rows"></div>
+  <div class="keys" id="keys"></div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in">
+    <div class="sheet-head">
+      <button type="button" id="sheetBack">‹ Back</button>
+      <div class="sheet-title" id="sheetTitle">Edit currencies</div>
+      <button type="button" id="sheetDone">Done</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  // All currencies the ECB / Frankfurter feed publishes, alphabetical
+  const ALL = [
+    ['AUD','🇦🇺','Australian dollar'], ['BGN','🇧🇬','Bulgarian lev'], ['BRL','🇧🇷','Brazilian real'],
+    ['CAD','🇨🇦','Canadian dollar'], ['CHF','🇨🇭','Swiss franc'], ['CNY','🇨🇳','Chinese yuan'],
+    ['CZK','🇨🇿','Czech koruna'], ['DKK','🇩🇰','Danish krone'], ['EUR','🇪🇺','Euro'],
+    ['GBP','🇬🇧','British pound'], ['HKD','🇭🇰','Hong Kong dollar'], ['HUF','🇭🇺','Hungarian forint'],
+    ['IDR','🇮🇩','Indonesian rupiah'], ['ILS','🇮🇱','Israeli shekel'], ['INR','🇮🇳','Indian rupee'],
+    ['ISK','🇮🇸','Icelandic króna'], ['JPY','🇯🇵','Japanese yen'], ['KRW','🇰🇷','South Korean won'],
+    ['MXN','🇲🇽','Mexican peso'], ['MYR','🇲🇾','Malaysian ringgit'], ['NOK','🇳🇴','Norwegian krone'],
+    ['NZD','🇳🇿','New Zealand dollar'], ['PHP','🇵🇭','Philippine peso'], ['PLN','🇵🇱','Polish złoty'],
+    ['RON','🇷🇴','Romanian leu'], ['SEK','🇸🇪','Swedish krona'], ['SGD','🇸🇬','Singapore dollar'],
+    ['THB','🇹🇭','Thai baht'], ['TRY','🇹🇷','Turkish lira'], ['USD','🇺🇸','US dollar'],
+    ['ZAR','🇿🇦','South African rand']
+  ].map(([c, f, n]) => ({c, f, n}));
+  const INFO = Object.fromEntries(ALL.map(x => [x.c, x]));
+
+  // Rough EUR-based rates, used only until the first successful fetch
+  const FALLBACK = {EUR:1, AUD:1.78, BGN:1.956, BRL:6.3, CAD:1.61, CHF:0.93, CNY:8.3, CZK:24.3,
+    DKK:7.46, GBP:0.87, HKD:9.05, HUF:390, IDR:19300, ILS:3.85, INR:102, ISK:143, JPY:178,
+    KRW:1650, MXN:21.5, MYR:4.85, NOK:11.7, NZD:2.02, PHP:74, PLN:4.25, RON:5.08, SEK:11.0,
+    SGD:1.50, THB:37.5, TRY:48, USD:1.16, ZAR:20.3};
+  const DEFAULT_SLOTS = ['SGD','PHP','MYR','USD','EUR'];
+  const STALE_MS = 3 * 60 * 60 * 1000;
+
+  const store = {
+    get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+    set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+  };
+
+  // ---------- state ----------
+  let slots = store.get('fxcalc.slots');
+  if (!Array.isArray(slots) || slots.length !== 5 || !slots.every(c => INFO[c]) || new Set(slots).size !== 5) {
+    slots = DEFAULT_SLOTS.slice();
+  }
+
+  let state = {active:slots[0], tokens:['0'], fresh:true, error:false};
+  const saved = store.get('fxcalc.state');
+  if (saved && slots.includes(saved.active) && Array.isArray(saved.tokens) && saved.tokens.length) {
+    state = {active:saved.active, tokens:saved.tokens, fresh:true, error:false};
+  }
+
+  let decimals = store.get('fxcalc.decimals') !== false;
+
+  let rates = {...FALLBACK}, ratesDate = null, fetchedAt = 0, isFallback = true, lastFailed = false;
+  const savedRates = store.get('fxcalc.rates');
+  if (savedRates && savedRates.rates && Object.keys(savedRates.rates).length >= 20) {
+    rates = savedRates.rates; ratesDate = savedRates.date; fetchedAt = savedRates.fetchedAt || 0; isFallback = false;
+  }
+
+  // ---------- math ----------
+  const OPS = ['+','−','×','÷'];
+  const isOp = t => OPS.includes(t);
+  const last = () => state.tokens[state.tokens.length - 1];
+  const setLast = v => { state.tokens[state.tokens.length - 1] = v; };
+
+  function evaluate(tokens){
+    const t = tokens.slice();
+    while (t.length && isOp(t[t.length - 1])) t.pop();
+    if (!t.length) return 0;
+    const vals = [parseFloat(t[0])], ops = [];
+    for (let i = 1; i < t.length; i += 2) {
+      const o = t[i], n = parseFloat(t[i + 1]);
+      if (o === '×') vals[vals.length - 1] *= n;
+      else if (o === '÷') vals[vals.length - 1] /= n;
+      else { ops.push(o); vals.push(n); }
+    }
+    let r = vals[0];
+    ops.forEach((o, i) => { r = o === '+' ? r + vals[i + 1] : r - vals[i + 1]; });
+    return r;
+  }
+
+  function toToken(v){
+    if (!isFinite(v) || Math.abs(v) >= 1e15) return null;
+    if (Math.abs(v) < 1e-6) return '0';
+    return String(Number(v.toFixed(8)));
+  }
+
+  const rateOf = c => (rates[c] > 0 ? rates[c] : NaN);
+  const convert = (v, from, to) => v / rateOf(from) * rateOf(to);
+
+  // Output (converted values, results, copies) follows the Decimals setting;
+  // the row being typed in always shows exactly what was typed.
+  const NF2 = new Intl.NumberFormat('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const NF0 = new Intl.NumberFormat('en-US', {maximumFractionDigits:0});
+  const roundOut = v => decimals ? Math.round(v * 100) / 100 : Math.round(v);
+  function fmtOut(v){
+    if (!isFinite(v)) return '—';
+    v = roundOut(v);
+    if (v === 0) v = 0; // drop -0
+    return (decimals ? NF2 : NF0).format(v);
+  }
+  function fmtToken(tok){
+    if (isOp(tok)) return ' ' + tok + ' ';
+    const neg = tok.startsWith('-');
+    const s = neg ? tok.slice(1) : tok;
+    const [i, f] = s.split('.');
+    const grouped = (i || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (neg ? '−' : '') + grouped + (f !== undefined ? '.' + f : '');
+  }
+
+  // ---------- input ----------
+  function setError(){ state.error = true; state.tokens = ['0']; state.fresh = true; }
+
+  function digit(d){
+    if (state.fresh || state.error) {
+      state.tokens = [d === '.' ? '0.' : d]; state.fresh = false; state.error = false; return;
+    }
+    const t = last();
+    if (isOp(t)) { state.tokens.push(d === '.' ? '0.' : d); return; }
+    if (d === '.') { if (!t.includes('.')) setLast(t + '.'); return; }
+    if (t.replace(/[-.]/g, '').length >= 12) return;
+    if (t === '0') setLast(d);
+    else if (t === '-0') setLast('-' + d);
+    else setLast(t + d);
+  }
+
+  function op(o){
+    if (state.error) return;
+    state.fresh = false;
+    const t = last();
+    if (isOp(t)) setLast(o);
+    else { if (t.endsWith('.')) setLast(t.slice(0, -1)); state.tokens.push(o); }
+  }
+
+  function equals(){
+    if (state.error) return;
+    const tok = toToken(evaluate(state.tokens));
+    if (tok === null) { setError(); return; }
+    state.tokens = [tok]; state.fresh = true;
+  }
+
+  function clearAll(){ state.tokens = ['0']; state.fresh = true; state.error = false; }
+
+  function back(){
+    if (state.error) { clearAll(); return; }
+    state.fresh = false;
+    const t = last();
+    if (isOp(t)) { state.tokens.pop(); return; }
+    const s = t.slice(0, -1);
+    if (s === '' || s === '-') {
+      if (state.tokens.length > 1) state.tokens.pop(); else setLast('0');
+    } else setLast(s);
+  }
+
+  function negate(){
+    if (state.error) return;
+    const t = last();
+    if (isOp(t)) return;
+    setLast(t.startsWith('-') ? t.slice(1) : '-' + t);
+    state.fresh = false;
+  }
+
+  function percent(){
+    if (state.error) return;
+    const t = last();
+    if (isOp(t)) return;
+    const n = parseFloat(t), L = state.tokens.length;
+    let res;
+    if (L >= 3 && (state.tokens[L - 2] === '+' || state.tokens[L - 2] === '−')) {
+      res = evaluate(state.tokens.slice(0, L - 2)) * n / 100;   // 200 + 10% = 220
+    } else res = n / 100;
+    const tok = toToken(res);
+    if (tok === null) { setError(); return; }
+    setLast(tok); state.fresh = false;
+  }
+
+  function handle(k){
+    if (/^[0-9.]$/.test(k)) digit(k);
+    else if (isOp(k)) op(k);
+    else if (k === '=') equals();
+    else if (k === 'clear') clearAll();
+    else if (k === 'back') back();
+    else if (k === 'neg') negate();
+    else if (k === 'pct') percent();
+    render();
+  }
+
+  // ---------- rows ----------
+  const rowsEl = document.getElementById('rows');
+  let rowEls = {};
+
+  function buildRows(){
+    rowsEl.innerHTML = '';
+    rowEls = {};
+    slots.forEach(c => {
+      const {f} = INFO[c];
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.setAttribute('role', 'button');
+      row.innerHTML = `<div class="cur"><div class="flag">${f}</div><div class="code">${c}</div></div>
+        <div class="val"><div class="num"></div><div class="sub"></div></div>`;
+      row.num = row.querySelector('.num');
+      row.sub = row.querySelector('.sub');
+      rowsEl.appendChild(row);
+      rowEls[c] = row;
+
+      // Tap = select row. Hold ~0.45s then release = copy value.
+      let downAt = 0, sx = 0, sy = 0, moved = false, armTimer = null;
+      row.addEventListener('pointerdown', e => {
+        downAt = Date.now(); sx = e.clientX; sy = e.clientY; moved = false;
+        armTimer = setTimeout(() => row.classList.add('armed'), 450);
+      });
+      row.addEventListener('pointermove', e => {
+        if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) {
+          moved = true; clearTimeout(armTimer); row.classList.remove('armed');
+        }
+      });
+      const cancel = () => { clearTimeout(armTimer); row.classList.remove('armed'); downAt = 0; };
+      row.addEventListener('pointercancel', cancel);
+      row.addEventListener('pointerleave', cancel);
+      row.addEventListener('pointerup', () => {
+        clearTimeout(armTimer); row.classList.remove('armed');
+        if (!downAt || moved) return;
+        const held = Date.now() - downAt; downAt = 0;
+        if (held >= 450) copyRow(c); else selectRow(c);
+      });
+      row.addEventListener('contextmenu', e => e.preventDefault());
+    });
+  }
+
+  function moveActiveTo(code){
+    const v = state.error ? NaN : evaluate(state.tokens);
+    const nv = convert(v, state.active, code);
+    state.active = code;
+    const tok = isFinite(nv) ? toToken(roundOut(nv)) : null;
+    state.tokens = [tok === null ? '0' : tok];
+    state.fresh = true; state.error = false;
+  }
+
+  function selectRow(code){
+    if (code === state.active) return;
+    moveActiveTo(code);
+    render();
+  }
+
+  function valueFor(code){
+    const v = state.error ? NaN : evaluate(state.tokens);
+    return code === state.active ? v : convert(v, state.active, code);
+  }
+
+  function copyRow(code){
+    const v = valueFor(code);
+    if (!isFinite(v)) return;
+    const text = decimals ? roundOut(v).toFixed(2) : String(roundOut(v) || 0);
+    const done = () => toast(`Copied ${fmtOut(v)} ${code}`);
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch(e) { toast('Copy failed'); }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else fallback();
+  }
+
+  // Number size: up to 50px, capped by the row's height, then shrunk to fit its width
+  function fit(row){
+    const el = row.num, h = row.clientHeight || 90;
+    let s = Math.max(14, Math.min(50, Math.floor(h * (row.sub.textContent ? 0.5 : 0.62))));
+    el.style.fontSize = s + 'px';
+    while (el.scrollWidth > el.clientWidth && s > 14) { s -= 2; el.style.fontSize = s + 'px'; }
+  }
+
+  function render(){
+    const v = state.error ? NaN : evaluate(state.tokens);
+    const hasOp = state.tokens.some(isOp);
+    slots.forEach(c => {
+      const row = rowEls[c], active = c === state.active;
+      row.classList.toggle('active', active);
+      row.setAttribute('aria-pressed', active);
+      if (active) {
+        row.num.textContent = state.error ? 'Error' : state.tokens.map(fmtToken).join('');
+        row.sub.textContent = hasOp && !state.error ? '= ' + fmtOut(v) : '';
+      } else {
+        row.num.textContent = fmtOut(convert(v, state.active, c));
+        row.sub.textContent = '';
+      }
+      fit(row);
+    });
+    store.set('fxcalc.state', {active:state.active, tokens:state.error ? ['0'] : state.tokens});
+  }
+
+  // ---------- keypad ----------
+  const BACK_SVG = '<svg viewBox="0 0 34 26" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M11 2h19a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H11L2 13z"/><path d="M15.5 8.5l9 9M24.5 8.5l-9 9"/></svg>';
+  const KEYS = [
+    ['back', BACK_SVG, 'fn'], ['clear', 'C', 'fn'], ['pct', '%', 'fn'], ['÷', '÷', 'op'],
+    ['7','7'], ['8','8'], ['9','9'], ['×', '×', 'op'],
+    ['4','4'], ['5','5'], ['6','6'], ['−', '−', 'op'],
+    ['1','1'], ['2','2'], ['3','3'], ['+', '+', 'op'],
+    ['neg', '+/−', 'small'], ['0','0'], ['.','.'], ['=', '=', 'op']
+  ];
+  const keysEl = document.getElementById('keys');
+  KEYS.forEach(([k, label, cls]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'key' + (cls ? ' ' + cls : '');
+    b.innerHTML = label;
+    b.setAttribute('aria-label', k);
+    b.addEventListener('click', () => handle(k));
+    keysEl.appendChild(b);
+  });
+  document.addEventListener('touchstart', () => {}, {passive:true}); // enables :active on iOS
+
+  // Physical keyboard (handy when testing on a laptop)
+  const KB = {'*':'×', 'x':'×', '/':'÷', '-':'−', '+':'+', 'Enter':'=', '=':'=',
+              'Backspace':'back', 'Escape':'clear', 'c':'clear', '%':'pct'};
+  document.addEventListener('keydown', e => {
+    if (!sheetEl.hidden || !menuEl.hidden) return;
+    if (/^[0-9.]$/.test(e.key)) { handle(e.key); e.preventDefault(); }
+    else if (KB[e.key]) { handle(KB[e.key]); e.preventDefault(); }
+  });
+
+  // ---------- menu ----------
+  const dotsEl = document.getElementById('dots');
+  const menuEl = document.getElementById('menu');
+  const backdropEl = document.getElementById('backdrop');
+  const freshEl = document.getElementById('fresh');
+
+  function freshText(){
+    if (isFallback) return lastFailed ? 'Offline · approximate rates' : 'Approximate rates';
+    const d = new Date(ratesDate + 'T12:00:00');
+    const ds = isNaN(d) ? ratesDate : d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+    return lastFailed ? `Offline · rates from ${ds}` : `ECB rates ${ds}`;
+  }
+  const openMenu = () => { freshEl.textContent = fetching ? 'Updating…' : freshText(); menuEl.hidden = false; backdropEl.hidden = false; };
+  const closeMenu = () => { menuEl.hidden = true; backdropEl.hidden = true; };
+  dotsEl.addEventListener('click', () => (menuEl.hidden ? openMenu() : closeMenu()));
+  backdropEl.addEventListener('click', closeMenu);
+  document.getElementById('mUpdate').addEventListener('click', () => { closeMenu(); fetchRates(true); });
+  document.getElementById('mEdit').addEventListener('click', () => { closeMenu(); openSheet(); });
+
+  // Decimals switch: menu stays open so the rows visibly change behind it
+  const decBtn = document.getElementById('mDec');
+  const decSwitch = document.getElementById('decSwitch');
+  const syncDecimals = () => {
+    decSwitch.classList.toggle('on', decimals);
+    decBtn.setAttribute('aria-checked', String(decimals));
+  };
+  decBtn.addEventListener('click', () => {
+    decimals = !decimals;
+    store.set('fxcalc.decimals', decimals);
+    syncDecimals();
+    render();
+  });
+  syncDecimals();
+
+  // ---------- edit currencies ----------
+  const sheetEl = document.getElementById('sheet');
+  const sheetBody = document.getElementById('sheetBody');
+  const sheetTitle = document.getElementById('sheetTitle');
+  const sheetBack = document.getElementById('sheetBack');
+
+  function itemHTML(c, right){
+    const {f, n} = INFO[c];
+    return `<span class="flag">${f}</span><span class="ic">${c}</span><span class="in">${n}</span>${right || ''}`;
+  }
+
+  function showSlots(){
+    sheetTitle.textContent = 'Edit currencies';
+    sheetBack.style.visibility = 'hidden';
+    sheetBody.innerHTML = '<div class="hint">Tap a row to change its currency.</div>';
+    slots.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'item';
+      b.innerHTML = itemHTML(c, '<span class="chev">›</span>');
+      b.addEventListener('click', () => showPicker(i));
+      sheetBody.appendChild(b);
+    });
+    sheetBody.scrollTop = 0;
+  }
+
+  function showPicker(i){
+    sheetTitle.textContent = `Row ${i + 1}`;
+    sheetBack.style.visibility = 'visible';
+    sheetBody.innerHTML = '';
+    let current = null;
+    ALL.forEach(({c}) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'item';
+      const mine = c === slots[i], used = !mine && slots.includes(c);
+      b.innerHTML = itemHTML(c, mine ? '<span class="tag">✓</span>' : used ? '<span class="tag muted">In use</span>' : '');
+      if (used) b.disabled = true;
+      else b.addEventListener('click', () => { replaceSlot(i, c); showSlots(); });
+      if (mine) current = b;
+      sheetBody.appendChild(b);
+    });
+    sheetBody.scrollTop = 0;
+    if (current) current.scrollIntoView({block:'center'});
+  }
+
+  function replaceSlot(i, code){
+    const old = slots[i];
+    if (old === code) return;
+    if (old === state.active) moveActiveTo(code);
+    slots[i] = code;
+    store.set('fxcalc.slots', slots);
+    buildRows();
+    render();
+  }
+
+  function openSheet(){ showSlots(); sheetEl.hidden = false; }
+  document.getElementById('sheetDone').addEventListener('click', () => { sheetEl.hidden = true; });
+  sheetBack.addEventListener('click', showSlots);
+
+  // ---------- rates ----------
+  let fetching = false;
+  async function fetchRates(manual){
+    if (fetching) return;
+    fetching = true;
+    if (manual) toast('Updating forex…');
+    const urls = [
+      'https://api.frankfurter.dev/v1/latest?base=EUR',
+      'https://api.frankfurter.app/latest?from=EUR'
+    ];
+    let ok = false;
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, {cache:'no-store'});
+        if (!r.ok) continue;
+        const d = await r.json();
+        const next = {EUR:1, ...d.rates};
+        if (DEFAULT_SLOTS.every(c => next[c] > 0)) {
+          rates = next; ratesDate = d.date; fetchedAt = Date.now(); isFallback = false;
+          store.set('fxcalc.rates', {rates, date:ratesDate, fetchedAt});
+          ok = true; break;
+        }
+      } catch(e) {}
+    }
+    fetching = false;
+    lastFailed = !ok;
+    render();
+    if (manual) toast(ok ? 'Forex updated · ' + freshText() : 'Couldn’t reach rate server');
+  }
+
+  const maybeRefresh = () => { if (!fetchedAt || Date.now() - fetchedAt > STALE_MS) fetchRates(false); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') maybeRefresh(); });
+
+  // ---------- toast ----------
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  function toast(msg){
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
+  }
+
+  // ---------- home screen icon + Android app manifest ----------
+  function makeIcon(size){
+    const cv = document.createElement('canvas'); cv.width = cv.height = size;
+    const x = cv.getContext('2d');
+    const g = x.createLinearGradient(0, 0, size, size);
+    g.addColorStop(0, '#ffb340'); g.addColorStop(1, '#ff8a00');
+    x.fillStyle = g; x.fillRect(0, 0, size, size);
+    x.fillStyle = '#fff'; x.font = `bold ${Math.round(size * 0.4)}px -apple-system, Helvetica, Arial`;
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('FX', size / 2, size * 0.53);
+    return cv.toDataURL('image/png');
+  }
+  try {
+    const icon = makeIcon(180);
+    document.getElementById('touchicon').href = icon;
+    document.getElementById('favicon').href = icon;
+
+    // Lets Chrome on Android open the Home Screen icon full-screen, like an app
+    const start = location.href.split('#')[0].split('?')[0];
+    const manifest = {
+      name:'FX Calc', short_name:'FX Calc', start_url:start, scope:start.replace(/[^/]*$/, ''),
+      display:'standalone', background_color:'#000000', theme_color:'#000000',
+      icons:[
+        {src:makeIcon(192), sizes:'192x192', type:'image/png', purpose:'any maskable'},
+        {src:makeIcon(512), sizes:'512x512', type:'image/png', purpose:'any maskable'}
+      ]
+    };
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], {type:'application/manifest+json'}));
+    document.head.appendChild(link);
+  } catch(e) {}
+
+  // ---------- start ----------
+  buildRows();
+  render();
+  window.addEventListener('resize', render);
+  maybeRefresh();
+})();
+</script>
+</body>
+</html>
