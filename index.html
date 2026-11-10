@@ -36,7 +36,11 @@
     min-width:230px;background:#2c2c2e;border-radius:14px;overflow:hidden;z-index:11;
     box-shadow:0 12px 32px rgba(0,0,0,.55)}
   .menu .fresh{font-size:13px;color:var(--muted);padding:11px 16px}
-  .menu .ver{font-size:11px;color:#636366;padding:8px 16px 10px;border-top:.5px solid #3a3a3c}
+  .menu .ver{font-size:11px;color:#636366;padding:8px 16px 10px;border-top:.5px solid #3a3a3c;line-height:1.5}
+  .menu .ver a{color:#636366}
+  .slot{position:relative;transition:transform .15s}
+  .slot.dragging{transition:none;z-index:2;background:#2c2c2e;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+  .grip{flex:none;color:var(--muted);font-size:22px;line-height:1;padding:8px 6px 8px 0;touch-action:none;cursor:grab}
   .menu button{display:block;width:100%;text-align:left;background:none;border:0;
     border-top:.5px solid #3a3a3c;color:#fff;font:inherit;font-size:17px;padding:13px 16px}
   .menu button:active{background:#3a3a3c}
@@ -114,7 +118,7 @@
   <button type="button" id="mUpdate">Update forex</button>
   <button type="button" id="mEdit">Edit currencies</button>
   <button type="button" id="mDec" class="tog" role="switch" aria-checked="true"><span>Decimals</span><span class="switch" id="decSwitch"></span></button>
-  <div class="ver">FX Calc · Version 2</div>
+  <div class="ver">FX Calc · Version 2<br><a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Rates By Exchange Rate API</a></div>
 </div>
 
 <div class="app">
@@ -136,27 +140,24 @@
 
 <script>
 (() => {
-  // All currencies the ECB / Frankfurter feed publishes, alphabetical
+  // Currencies offered in the picker, alphabetical
   const ALL = [
-    ['AUD','🇦🇺','Australian dollar'], ['BGN','🇧🇬','Bulgarian lev'], ['BRL','🇧🇷','Brazilian real'],
+    ['AUD','🇦🇺','Australian dollar'], ['BND','🇧🇳','Brunei dollar'], ['BRL','🇧🇷','Brazilian real'],
     ['CAD','🇨🇦','Canadian dollar'], ['CHF','🇨🇭','Swiss franc'], ['CNY','🇨🇳','Chinese yuan'],
-    ['CZK','🇨🇿','Czech koruna'], ['DKK','🇩🇰','Danish krone'], ['EUR','🇪🇺','Euro'],
-    ['GBP','🇬🇧','British pound'], ['HKD','🇭🇰','Hong Kong dollar'], ['HUF','🇭🇺','Hungarian forint'],
+    ['EUR','🇪🇺','Euro'], ['GBP','🇬🇧','British pound'], ['HKD','🇭🇰','Hong Kong dollar'],
     ['IDR','🇮🇩','Indonesian rupiah'], ['ILS','🇮🇱','Israeli shekel'], ['INR','🇮🇳','Indian rupee'],
-    ['ISK','🇮🇸','Icelandic króna'], ['JPY','🇯🇵','Japanese yen'], ['KRW','🇰🇷','South Korean won'],
-    ['MXN','🇲🇽','Mexican peso'], ['MYR','🇲🇾','Malaysian ringgit'], ['NOK','🇳🇴','Norwegian krone'],
-    ['NZD','🇳🇿','New Zealand dollar'], ['PHP','🇵🇭','Philippine peso'], ['PLN','🇵🇱','Polish złoty'],
-    ['RON','🇷🇴','Romanian leu'], ['SEK','🇸🇪','Swedish krona'], ['SGD','🇸🇬','Singapore dollar'],
-    ['THB','🇹🇭','Thai baht'], ['TRY','🇹🇷','Turkish lira'], ['USD','🇺🇸','US dollar'],
-    ['ZAR','🇿🇦','South African rand']
+    ['JPY','🇯🇵','Japanese yen'], ['KHR','🇰🇭','Cambodian riel'], ['KRW','🇰🇷','South Korean won'],
+    ['LAK','🇱🇦','Lao kip'], ['MMK','🇲🇲','Myanmar kyat'], ['MXN','🇲🇽','Mexican peso'],
+    ['MYR','🇲🇾','Malaysian ringgit'], ['NZD','🇳🇿','New Zealand dollar'], ['PHP','🇵🇭','Philippine peso'],
+    ['SGD','🇸🇬','Singapore dollar'], ['THB','🇹🇭','Thai baht'], ['TRY','🇹🇷','Turkish lira'],
+    ['USD','🇺🇸','US dollar'], ['VND','🇻🇳','Vietnamese dong'], ['ZAR','🇿🇦','South African rand']
   ].map(([c, f, n]) => ({c, f, n}));
   const INFO = Object.fromEntries(ALL.map(x => [x.c, x]));
 
   // Rough EUR-based rates, used only until the first successful fetch
-  const FALLBACK = {EUR:1, AUD:1.78, BGN:1.956, BRL:6.3, CAD:1.61, CHF:0.93, CNY:8.3, CZK:24.3,
-    DKK:7.46, GBP:0.87, HKD:9.05, HUF:390, IDR:19300, ILS:3.85, INR:102, ISK:143, JPY:178,
-    KRW:1650, MXN:21.5, MYR:4.85, NOK:11.7, NZD:2.02, PHP:74, PLN:4.25, RON:5.08, SEK:11.0,
-    SGD:1.50, THB:37.5, TRY:48, USD:1.16, ZAR:20.3};
+  const FALLBACK = {EUR:1, AUD:1.78, BND:1.50, BRL:6.3, CAD:1.61, CHF:0.93, CNY:8.3, GBP:0.87,
+    HKD:9.05, IDR:19300, ILS:3.85, INR:102, JPY:178, KHR:4650, KRW:1650, LAK:25000, MMK:2440,
+    MXN:21.5, MYR:4.85, NZD:2.02, PHP:74, SGD:1.50, THB:37.5, TRY:48, USD:1.16, VND:30500, ZAR:20.3};
   const DEFAULT_SLOTS = ['SGD','PHP','MYR','USD','EUR'];
   const STALE_MS = 3 * 60 * 60 * 1000;
 
@@ -166,9 +167,11 @@
   };
 
   // ---------- state ----------
-  let slots = store.get('fxcalc.slots');
-  if (!Array.isArray(slots) || slots.length !== 5 || !slots.every(c => INFO[c]) || new Set(slots).size !== 5) {
-    slots = DEFAULT_SLOTS.slice();
+  // Saved slots: keep valid picks in order; refill any dropped currency from the defaults
+  let slots = [...new Set((store.get('fxcalc.slots') || []).filter(c => INFO[c]))].slice(0, 5);
+  for (const c of [...DEFAULT_SLOTS, ...ALL.map(x => x.c)]) {
+    if (slots.length >= 5) break;
+    if (!slots.includes(c)) slots.push(c);
   }
 
   let state = {active:slots[0], tokens:['0'], fresh:true, error:false};
@@ -181,8 +184,10 @@
 
   let rates = {...FALLBACK}, ratesDate = null, fetchedAt = 0, isFallback = true, lastFailed = false;
   const savedRates = store.get('fxcalc.rates');
-  if (savedRates && savedRates.rates && Object.keys(savedRates.rates).length >= 20) {
-    rates = savedRates.rates; ratesDate = savedRates.date; fetchedAt = savedRates.fetchedAt || 0; isFallback = false;
+  if (savedRates && savedRates.rates && DEFAULT_SLOTS.every(c => savedRates.rates[c] > 0)) {
+    rates = {...FALLBACK, ...savedRates.rates}; ratesDate = savedRates.date; isFallback = false;
+    // Older caches lack some currencies (e.g. VND): treat as stale so it refetches
+    fetchedAt = ALL.every(x => savedRates.rates[x.c] > 0) ? (savedRates.fetchedAt || 0) : 0;
   }
 
   // ---------- math ----------
@@ -461,7 +466,7 @@
     if (isFallback) return lastFailed ? 'Offline · approximate rates' : 'Approximate rates';
     const d = new Date(ratesDate + 'T12:00:00');
     const ds = isNaN(d) ? ratesDate : d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
-    return lastFailed ? `Offline · rates from ${ds}` : `ECB rates ${ds}`;
+    return lastFailed ? `Offline · rates from ${ds}` : `Rates ${ds}`;
   }
   const openMenu = () => { freshEl.textContent = fetching ? 'Updating…' : freshText(); menuEl.hidden = false; backdropEl.hidden = false; };
   const closeMenu = () => { menuEl.hidden = true; backdropEl.hidden = true; };
@@ -499,15 +504,59 @@
   function showSlots(){
     sheetTitle.textContent = 'Edit currencies';
     sheetBack.style.visibility = 'hidden';
-    sheetBody.innerHTML = '<div class="hint">Tap a row to change its currency.</div>';
+    sheetBody.innerHTML = '<div class="hint">Drag ≡ to reorder. Tap a row to change its currency.</div>';
     slots.forEach((c, i) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'item';
-      b.innerHTML = itemHTML(c, '<span class="chev">›</span>');
-      b.addEventListener('click', () => showPicker(i));
-      sheetBody.appendChild(b);
+      const item = document.createElement('div');
+      item.className = 'item slot';
+      item.setAttribute('role', 'button');
+      item.innerHTML = '<span class="grip" aria-label="Drag to reorder">≡</span>' + itemHTML(c, '<span class="chev">›</span>');
+      item.addEventListener('click', e => { if (!e.target.closest('.grip')) showPicker(i); });
+      enableDrag(item, item.querySelector('.grip'));
+      sheetBody.appendChild(item);
     });
     sheetBody.scrollTop = 0;
+  }
+
+  // Press-and-drag the grip; the other slots slide out of the way; release to drop
+  function enableDrag(item, grip){
+    grip.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const items = [...sheetBody.querySelectorAll('.slot')];
+      const from = items.indexOf(item);
+      const step = item.offsetHeight + 8; // row height + gap
+      const startY = e.clientY;
+      let to = from;
+      grip.setPointerCapture(e.pointerId);
+      item.classList.add('dragging');
+
+      const move = ev => {
+        const dy = ev.clientY - startY;
+        item.style.transform = `translateY(${dy}px)`;
+        to = Math.max(0, Math.min(items.length - 1, from + Math.round(dy / step)));
+        items.forEach((it, k) => {
+          if (it === item) return;
+          const shift = (from < to && k > from && k <= to) ? -step
+                      : (from > to && k < from && k >= to) ? step : 0;
+          it.style.transform = shift ? `translateY(${shift}px)` : '';
+        });
+      };
+      const drop = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', drop);
+        grip.removeEventListener('pointercancel', drop);
+        if (to !== from) {
+          const [c] = slots.splice(from, 1);
+          slots.splice(to, 0, c);
+          store.set('fxcalc.slots', slots);
+          buildRows();
+          render();
+        }
+        showSlots();
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', drop);
+      grip.addEventListener('pointercancel', drop);
+    });
   }
 
   function showPicker(i){
@@ -549,19 +598,24 @@
     if (fetching) return;
     fetching = true;
     if (manual) toast('Updating forex…');
-    const urls = [
-      'https://api.frankfurter.dev/v1/latest?base=EUR',
-      'https://api.frankfurter.app/latest?from=EUR'
+    // Main: ExchangeRate-API (covers every listed currency).
+    // Backup: Frankfurter (ECB) for the currencies it has; others keep their last known rate.
+    const sources = [
+      ['https://open.er-api.com/v6/latest/EUR',
+        d => d.result === 'success' && {rates:d.rates, date:new Date(d.time_last_update_unix * 1000).toISOString().slice(0, 10)}],
+      ['https://api.frankfurter.dev/v1/latest?base=EUR', d => ({rates:d.rates, date:d.date})],
+      ['https://api.frankfurter.app/latest?from=EUR', d => ({rates:d.rates, date:d.date})]
     ];
     let ok = false;
-    for (const url of urls) {
+    for (const [url, read] of sources) {
       try {
         const r = await fetch(url, {cache:'no-store'});
         if (!r.ok) continue;
-        const d = await r.json();
-        const next = {EUR:1, ...d.rates};
-        if (DEFAULT_SLOTS.every(c => next[c] > 0)) {
-          rates = next; ratesDate = d.date; fetchedAt = Date.now(); isFallback = false;
+        const got = read(await r.json());
+        if (!got || !got.rates) continue;
+        const next = {...rates, ...got.rates, EUR:1};
+        if (DEFAULT_SLOTS.every(c => got.rates[c] > 0 || c === 'EUR')) {
+          rates = next; ratesDate = got.date; fetchedAt = Date.now(); isFallback = false;
           store.set('fxcalc.rates', {rates, date:ratesDate, fetchedAt});
           ok = true; break;
         }
